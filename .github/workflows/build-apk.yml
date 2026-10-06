@@ -47,16 +47,10 @@ jobs:
             ~/.gradle/wrapper
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
 
-      - name: Generate release keystore and local.properties
+      - name: Write local.properties for the pinned release keystore
         run: |
-          keytool -genkeypair -v \
-            -keystore app/app.key \
-            -alias rikkahub \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass rikkahub -keypass rikkahub \
-            -dname "CN=RikkaHub, OU=Build, O=RikkaHub, L=Beijing, ST=Beijing, C=CN"
           {
-            echo "storeFile=$GITHUB_WORKSPACE/app/app.key"
+            echo "storeFile=$GITHUB_WORKSPACE/keystore/rikkahub.key"
             echo "storePassword=rikkahub"
             echo "keyAlias=rikkahub"
             echo "keyPassword=rikkahub"

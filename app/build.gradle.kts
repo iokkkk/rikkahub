@@ -1,4 +1,5 @@
 import com.android.build.api.dsl.Packaging
+import com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.io.FileInputStream
@@ -79,6 +80,11 @@ android {
             optimization {
                 enable = true
             }
+            // This build ships without a real Firebase project (placeholder google-services.json),
+            // so Crashlytics deobfuscation mapping upload must stay disabled.
+            configure<CrashlyticsExtension> {
+                mappingFileUploadEnabled = false
+            }
             buildConfigField("String", "VERSION_NAME", "\"${android.defaultConfig.versionName}\"")
             buildConfigField("String", "VERSION_CODE", "\"${android.defaultConfig.versionCode}\"")
         }
@@ -121,12 +127,6 @@ android {
         compilerOptions.optIn.add("kotlinx.coroutines.ExperimentalCoroutinesApi")
         compilerOptions.optIn.add("androidx.navigation3.runtime.ExperimentalNavigation3Api")
     }
-}
-
-// This build ships without a real Firebase project (placeholder google-services.json),
-// so Crashlytics deobfuscation mapping upload must be disabled.
-firebaseCrashlytics {
-    mappingFileUploadEnabled = false
 }
 
 composeCompiler {

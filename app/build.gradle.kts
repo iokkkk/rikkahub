@@ -24,7 +24,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "me.rerere.rikkahub"
+        applicationId = "me.rerere.rikkahucc"
         minSdk = 26
         targetSdk = 37
         versionCode = 193

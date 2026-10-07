@@ -1,5 +1,5 @@
-import com.android.build.api.dsl.Packaging
 import com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension
+import com.android.build.api.dsl.Packaging
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.io.FileInputStream
@@ -27,8 +27,8 @@ android {
         applicationId = "me.rerere.rikkahub"
         minSdk = 26
         targetSdk = 37
-        versionCode = 192
-        versionName = "2.5.6.1"
+        versionCode = 193
+        versionName = "2.5.6.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -80,8 +80,8 @@ android {
             optimization {
                 enable = true
             }
-            // This build ships without a real Firebase project (placeholder google-services.json),
-            // so Crashlytics deobfuscation mapping upload must stay disabled.
+            // Local builds use a placeholder google-services.json, so the Crashlytics
+            // deobfuscation mapping upload must stay disabled.
             configure<CrashlyticsExtension> {
                 mappingFileUploadEnabled = false
             }
@@ -315,6 +315,7 @@ dependencies {
     implementation(project(":mediagen"))
     implementation(project(":common"))
     implementation(project(":material3"))
+    implementation(project(":ui"))
     implementation(project(":workspace"))
     implementation(project(":oauth"))
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar", "*.aar"))))

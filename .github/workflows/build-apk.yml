@@ -1,4 +1,4 @@
-name: Build RikkaHub 2.5.6.1 APK
+name: Build RikkaHub APK
 
 on:
   workflow_dispatch:
@@ -64,17 +64,26 @@ jobs:
       - name: Show outputs
         run: ls -lh app/build/outputs/apk/release/
 
+      - name: Read version from gradle
+        id: ver
+        run: |
+          VN=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
+          VC=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' app/build.gradle.kts)
+          echo "version=$VN" >> $GITHUB_OUTPUT
+          echo "code=$VC" >> $GITHUB_OUTPUT
+          echo "resolved versionName=$VN versionCode=$VC"
+
       - name: Publish Release (arm64 APK only)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.5.6.1
-          name: RikkaHub v2.5.6.1
+          tag_name: v${{ steps.ver.outputs.version }}
+          name: RikkaHub v${{ steps.ver.outputs.version }}
           draft: false
           prerelease: false
           body: |
-            RikkaHub 2.5.6.1 (arm64-v8a)
-            - Fixed signing keystore
-            - Version name: 2.5.6.1
-            - Version code: 192
+            RikkaHub ${{ steps.ver.outputs.version }} (arm64-v8a)
+            - versionName: ${{ steps.ver.outputs.version }}
+            - versionCode: ${{ steps.ver.outputs.code }}
+            - signing: pinned keystore (installable over previous builds)
           files: |
             app/build/outputs/apk/release/*arm64-v8a*.apk

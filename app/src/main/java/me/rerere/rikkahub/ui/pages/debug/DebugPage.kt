@@ -205,11 +205,11 @@ private fun MainPage(vm: DebugVM) {
         }
         Button(
             onClick = {
-                vm.updateSettings(
-                    settings.copy(
+                vm.updateSettings {
+                    it.copy(
                         chatModelId = Uuid.random()
                     )
-                )
+                }
             }
         ) {
             Text("重置Chat模型")
@@ -258,8 +258,9 @@ private fun MainPage(vm: DebugVM) {
 
         Text("Launch Stats", style = MaterialTheme.typography.labelMedium)
 
-        var launchCountInput by remember(settings.launchCount) {
-            mutableStateOf(settings.launchCount.toString())
+        val launchCount by vm.launchCount.collectAsStateWithLifecycle()
+        var launchCountInput by remember(launchCount) {
+            mutableStateOf(launchCount.toString())
         }
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -268,14 +269,12 @@ private fun MainPage(vm: DebugVM) {
             OutlinedTextField(
                 value = launchCountInput,
                 onValueChange = { launchCountInput = it },
-                label = { Text("launchCount (current: ${settings.launchCount})") },
+                label = { Text("launchCount (current: $launchCount)") },
                 modifier = Modifier.weight(1f),
                 singleLine = true,
             )
             Button(onClick = {
-                launchCountInput.toIntOrNull()?.let {
-                    vm.updateSettings(settings.copy(launchCount = it))
-                }
+                launchCountInput.toIntOrNull()?.let(vm::setLaunchCount)
             }) {
                 Text("Set")
             }
@@ -297,7 +296,7 @@ private fun MainPage(vm: DebugVM) {
             )
             Button(onClick = {
                 dismissedAtInput.toIntOrNull()?.let {
-                    vm.updateSettings(settings.copy(sponsorAlertDismissedAt = it))
+                    vm.updateSettings { latest -> latest.copy(sponsorAlertDismissedAt = it) }
                 }
             }) {
                 Text("Set")

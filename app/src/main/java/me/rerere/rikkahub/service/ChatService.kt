@@ -60,7 +60,6 @@ import me.rerere.rikkahub.data.ai.transformers.TimeReminderTransformer
 import me.rerere.rikkahub.data.ai.transformers.WorkspaceReminderTransformer
 import me.rerere.rikkahub.data.event.AppEvent
 import me.rerere.rikkahub.data.event.AppEventBus
-import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.datastore.findModelById
 import me.rerere.rikkahub.data.datastore.findProvider
@@ -72,6 +71,7 @@ import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.AssistantAffectScope
 import me.rerere.rikkahub.data.model.MessageNode
 import me.rerere.rikkahub.data.model.bindConfig
+import me.rerere.rikkahub.data.model.fillModelSnapshots
 import me.rerere.rikkahub.data.model.getAssistantOf
 import me.rerere.rikkahub.data.model.getChatModelOf
 import me.rerere.rikkahub.data.model.getStoredAssistantOf
@@ -296,7 +296,7 @@ class ChatService(
     suspend fun initializeConversation(conversationId: Uuid) {
         sessionManager.withSession(conversationId) { session ->
             ensureInitialized(session)
-            settingsStore.updateAssistant(session.state.value.assistantId)
+            settingsStore.selectAssistant(session.state.value.assistantId)
         }
     }
 
@@ -304,8 +304,7 @@ class ChatService(
         session.initialize {
             loadConversation(session.id) ?: run {
                 // 新建对话, 并添加预设消息
-                val currentSettings = settingsStore.settingsFlowRaw.first()
-                val assistant = currentSettings.getCurrentAssistant()
+                val assistant = settingsStore.awaitLoaded().getCurrentAssistant()
                 Conversation.ofId(
                     id = session.id,
                     assistantId = assistant.id,
@@ -318,14 +317,11 @@ class ChatService(
     // 引入会话配置之前创建的会话没有固定配置，加载时按助手当前的值补上，之后不再随助手变化。
     private suspend fun loadConversation(conversationId: Uuid): Conversation? {
         val conversation = conversationRepo.getConversationById(conversationId) ?: return null
-        val bound = conversation.bindConfig(loadedSettings())
+        // settingsFlow 在启动初期还是占位值，固定配置必须基于真实设置
+        val bound = conversation.bindConfig(settingsStore.awaitLoaded())
         if (bound !== conversation) conversationRepo.updateConversationConfig(bound)
         return bound
     }
-
-    // settingsFlow 在启动初期还是占位值，固定配置必须基于真实设置。
-    // 不读 settingsFlowRaw：它落后于还没写完盘的修改，刚在新会话里切的模型会被漏掉。
-    private suspend fun loadedSettings(): Settings = settingsStore.settingsFlow.first { !it.init }
 
     // ---- 发送消息 ----
 
@@ -437,7 +433,7 @@ class ChatService(
                 finishInterruptedPendingTools(conversationId)
 
                 val currentConversation = session.state.value
-                val settings = settingsStore.settingsFlow.first()
+                val settings = settingsStore.awaitLoaded()
                 val assistant = settings.getAssistantById(currentConversation.assistantId)
                     ?: settings.getCurrentAssistant()
                 val processedContent = preprocessUserInputParts(content, assistant)
@@ -640,7 +636,7 @@ class ChatService(
         conversationId: Uuid,
         messageRange: ClosedRange<Int>? = null
     ) {
-        val settings = settingsStore.settingsFlow.first()
+        val settings = settingsStore.awaitLoaded()
         val initialConversation = getConversationFlow(conversationId).value
         // 模型、思考级别、搜索、工具等以会话上固定的配置为准
         val assistant = settings.getAssistantOf(initialConversation)
@@ -872,7 +868,7 @@ class ChatService(
         if (!shouldGenerate) return@withContext
 
         runCatching {
-            val settings = settingsStore.settingsFlow.first()
+            val settings = settingsStore.awaitLoaded()
             val model = settings.findModelById(settings.fastModelId)
                 ?: throw IllegalStateException(context.getString(R.string.error_fast_model_not_found))
             val provider = model.findProvider(settings.providers)
@@ -917,7 +913,7 @@ class ChatService(
         conversation: Conversation,
     ) = withContext(Dispatchers.IO) {
         runCatching {
-            val settings = settingsStore.settingsFlow.first()
+            val settings = settingsStore.awaitLoaded()
             if (!settings.enableSuggestion) return@runCatching
             val model = settings.findModelById(settings.fastModelId)
                 ?: return@runCatching
@@ -976,7 +972,7 @@ class ChatService(
         // 生成循环按下标回写消息，期间插入节点会让回复写到错误的节点上。
         check(!session.isGenerating) { context.getString(R.string.chat_page_compress_blocked_generating) }
 
-        val settings = settingsStore.settingsFlow.first()
+        val settings = settingsStore.awaitLoaded()
         val model = settings.findModelById(settings.compressModelId)
             ?: settings.getChatModelOf(conversation)
             ?: throw IllegalStateException("No model available for compression")
@@ -1065,7 +1061,7 @@ class ChatService(
     suspend fun updateChatAssistant(conversationId: Uuid, update: (Assistant) -> Assistant) {
         sessionManager.withSession(conversationId) { session ->
             ensureInitialized(session)
-            val settings = settingsStore.settingsFlow.first()
+            val settings = settingsStore.awaitLoaded()
             val conversation = session.state.value
             val stored = settings.getStoredAssistantOf(conversation)
             val updated = update(settings.getAssistantOf(conversation))
@@ -1246,7 +1242,8 @@ class ChatService(
         }
 
         // 会话落库即视为开始，此时把助手的配置固定到会话上
-        val updatedConversation = conversation.bindConfig(loadedSettings())
+        val settings = settingsStore.awaitLoaded()
+        val updatedConversation = conversation.bindConfig(settings).fillModelSnapshots(settings)
         updateConversation(conversationId, updatedConversation)
 
         if (!exists) {
@@ -1269,7 +1266,7 @@ class ChatService(
     ) {
         appScope.launch(Dispatchers.IO) {
             try {
-                val settings = settingsStore.settingsFlow.first()
+                val settings = settingsStore.awaitLoaded()
 
                 val messageText = message.parts.filterIsInstance<UIMessagePart.Text>()
                     .joinToString("\n\n") { it.text }
@@ -1334,7 +1331,7 @@ class ChatService(
         if (parts.isEmptyInputMessage()) return
 
         val currentConversation = getConversationFlow(conversationId).value
-        val settings = settingsStore.settingsFlow.first()
+        val settings = settingsStore.awaitLoaded()
         val assistant = settings.getAssistantById(currentConversation.assistantId)
             ?: settings.getCurrentAssistant()
         val processedParts = preprocessUserInputParts(parts, assistant)
@@ -1346,7 +1343,8 @@ class ChatService(
             }
             edited = true
 
-            if (node.messages.first { it.id == messageId }.isContextCheckpoint) {
+            val original = node.messages.first { it.id == messageId }
+            if (original.isContextCheckpoint) {
                 // 摘要原地改写：新建分支会丢掉检查点标记，删除摘要时还会露出旧版本。
                 return@map node.copy(
                     messages = node.messages.map { message ->
@@ -1359,6 +1357,9 @@ class ChatService(
                 messages = node.messages + UIMessage(
                     role = node.role,
                     parts = processedParts,
+                    // 编辑的是原消息的内容，来源仍是生成它的模型
+                    modelId = original.modelId,
+                    modelSnapshot = original.modelSnapshot,
                 ),
                 selectIndex = node.messages.size
             )

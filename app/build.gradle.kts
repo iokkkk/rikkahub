@@ -1,4 +1,3 @@
-import com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension
 import com.android.build.api.dsl.Packaging
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
@@ -27,8 +26,8 @@ android {
         applicationId = "me.rerere.rikkahucc"
         minSdk = 26
         targetSdk = 37
-        versionCode = 193
-        versionName = "2.5.6.2"
+        versionCode = 194
+        versionName = "2.5.6.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -79,11 +78,6 @@ android {
             signingConfig = signingConfigs.getByName("release")
             optimization {
                 enable = true
-            }
-            // Local builds use a placeholder google-services.json, so the Crashlytics
-            // deobfuscation mapping upload must stay disabled.
-            configure<CrashlyticsExtension> {
-                mappingFileUploadEnabled = false
             }
             buildConfigField("String", "VERSION_NAME", "\"${android.defaultConfig.versionName}\"")
             buildConfigField("String", "VERSION_CODE", "\"${android.defaultConfig.versionCode}\"")
